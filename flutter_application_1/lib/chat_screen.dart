@@ -14,48 +14,65 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isLoading = false;
 
   Future<void> sendMessage(String message) async {
-    if (message.trim().isEmpty) return;
+  if (message.trim().isEmpty) return;
 
-    setState(() {
-      _messages.add({"role": "user", "text": message});
-      _isLoading = true;
-    });
+  setState(() {
+    _messages.add({"role": "user", "text": message});
+    _isLoading = true;
+  });
 
-    // Auto scroll to bottom
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _scrollToBottom();
+  });
 
-    try {
-      final response = await http.post(
-        Uri.parse("https://ed2b2567b493.ngrok-free.app/ask"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"question": message}),
-      );
+  try {
+    final url = Uri.parse("https://ed2b2567b493.ngrok-free.app/ask");
 
-      if (response.statusCode == 200) {
-        final answer = jsonDecode(response.body)["answer"];
-        setState(() {
-          _messages.add({"role": "bot", "text": answer});
-        });
-      } else {
-        setState(() {
-          _messages.add({"role": "bot", "text": "خطا در دریافت پاسخ از سرور."});
-        });
-      }
-    } catch (e) {
+    final response = await http.post(
+      url,
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "FlutterApp/1.0", // مشابه Postman
+      },
+      body: jsonEncode({"question": message}),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final answer = data["answer"] ?? "پاسخی دریافت نشد.";
       setState(() {
-        _messages.add({"role": "bot", "text": "خطا در اتصال به سرور."});
+        _messages.add({"role": "bot", "text": answer});
+      });
+    } else if (response.statusCode == 401) {
+      setState(() {
+        _messages.add({
+          "role": "bot",
+          "text": "خطای احراز هویت (401). احتمالا API key یا ngrok URL اشتباه است."
+        });
+      });
+    } else {
+      setState(() {
+        _messages.add({
+          "role": "bot",
+          "text": "خطا در دریافت پاسخ از سرور: ${response.statusCode}"
+        });
       });
     }
-
+  } catch (e) {
     setState(() {
-      _isLoading = false;
+      _messages.add({"role": "bot", "text": "خطا در اتصال به سرور: $e"});
     });
-
-    _controller.clear();
-    _scrollToBottom();
   }
+
+  setState(() {
+    _isLoading = false;
+  });
+
+  _controller.clear();
+  _scrollToBottom();
+}
+
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
